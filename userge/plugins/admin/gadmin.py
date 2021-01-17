@@ -528,10 +528,10 @@ async def zombie_clean(message: Message):
     about={
         "header": "use this to pin & unpin messages",
         "description": "pin & unpin messages in groups with or without notify to members.",
-        "flags": {"-s": "silent", "-u": "unpin"},
+        "flags": {"-l": "loud", "-u": "unpin"},
         "examples": [
             "{tr}pin [reply to chat message]",
-            "{tr}pin -s [reply to chat message]",
+            "{tr}pin -l [reply to chat message]",
             "{tr}pin -u [send to chat]",
         ],
     },
@@ -542,12 +542,12 @@ async def pin_msgs(message: Message):
     """ pin & unpin message in groups """
     chat_id = message.chat.id
     flags = message.flags
-    silent_pin = "-s" in flags
+    loud_pin = "-l" in flags
     unpin_pinned = "-u" in flags
     if unpin_pinned:
         try:
             await message.client.unpin_chat_message(chat_id)
-            await message.delete()
+            await message.edit("`Unpinned Successfully!`")
             await CHANNEL.log(f"#UNPIN\n\nCHAT: `{message.chat.title}` (`{chat_id}`)")
         except Exception as e_f:
             await message.edit(
@@ -555,14 +555,14 @@ async def pin_msgs(message: Message):
                 "\n`do .help pin for more info..`\n\n"
                 f"**ERROR:** `{e_f}`"
             )
-    elif silent_pin:
+    elif loud_pin:
         try:
             message_id = message.reply_to_message.message_id
             await message.client.pin_chat_message(
-                chat_id, message_id, disable_notification=True
+                chat_id, message_id, disable_notification=False
             )
-            await message.delete()
-            await CHANNEL.log(f"#PIN-SILENT\n\n{message.chat.title}` (`{chat_id}`)")
+            await message.edit("`Pinned Successfully!\nSilent: False")
+            await CHANNEL.log(f"#PIN-loud\n\n{message.chat.title}` (`{chat_id}`)")
         except Exception as e_f:
             await message.edit(
                 r"`something went wrong! (⊙_⊙;)`"
@@ -572,8 +572,8 @@ async def pin_msgs(message: Message):
     else:
         try:
             message_id = message.reply_to_message.message_id
-            await message.client.pin_chat_message(chat_id, message_id)
-            await message.delete()
+            await message.client.pin_chat_message(chat_id, message_id, disable_notification=True)
+            await message.edit("`Pinned Successfully!`")
             await CHANNEL.log(f"#PIN\n\nCHAT: `{message.chat.title}` (`{chat_id}`)")
         except Exception as e_f:
             await message.edit(
