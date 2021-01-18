@@ -572,7 +572,9 @@ async def pin_msgs(message: Message):
     else:
         try:
             message_id = message.reply_to_message.message_id
-            await message.client.pin_chat_message(chat_id, message_id, disable_notification=True)
+            await message.client.pin_chat_message(
+                chat_id, message_id, disable_notification=True
+            )
             await message.edit("`Pinned Successfully!`")
             await CHANNEL.log(f"#PIN\n\nCHAT: `{message.chat.title}` (`{chat_id}`)")
         except Exception as e_f:
