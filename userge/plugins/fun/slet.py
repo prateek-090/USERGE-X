@@ -18,9 +18,6 @@ from userge import Message, userge
     allow_via_bot=False,
 )
 async def sticklet(message: Message):
-    # R = random.randint(0, 256)
-    # G = random.randint(0, 256)
-    # B = random.randint(0, 256)
     sticktext = message.input_or_reply_str
     if not sticktext:
         await message.edit("**Bruh** ~`I need some text to make sticklet`")
@@ -45,12 +42,11 @@ async def sticklet(message: Message):
             sticktext, font=font, stroke_width=6, spacing=-10
         )
 
-        if current_size[0] > 512 or current_size[1] > 512 - 64:
-            fontsize -= 3
-            font = ImageFont.truetype("resources/Roboto-Regular.ttf", size=fontsize)
-        else:
+        if current_size[0] <= 512 and current_size[1] <= 512 - 64:
             break
 
+        fontsize -= 3
+        font = ImageFont.truetype("resources/Roboto-Regular.ttf", size=fontsize)
     width, height = draw.multiline_textsize(
         sticktext, font=font, stroke_width=6, spacing=-10
     )

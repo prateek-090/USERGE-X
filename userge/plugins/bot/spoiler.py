@@ -3,36 +3,43 @@
 
 
 import datetime
-import json
 import os
 from uuid import uuid1
 
+import ujson
 from pyrogram import filters
-from pyrogram.errors import MessageNotModified
+from pyrogram.errors import MessageNotModified, UserIsBlocked
 from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
-from userge import Config, Message, userge
+from userge import Config, Message, get_collection, userge
 from userge.utils import mention_html
 
 CHANNEL = userge.getCLogger(__name__)
 PATH = "./userge/xcache/spoiler_db.json"
+BOT_BAN = get_collection("BOT_BAN")
+BOT_START = get_collection("BOT_START")
 
 
 class Spoiler_DB:
     def __init__(self):
         if not os.path.exists(PATH):
             d = {}
-            json.dump(d, open(PATH, "w"))
-        self.db = json.load(open(PATH))
+            ujson.dump(d, open(PATH, "w"))
+        self.db = ujson.load(open(PATH))
+
+    def stats_(self, rnd_id: str, user_id: int, user_name: str):
+        if user_id not in Config.OWNER_ID and user_id not in self.db[rnd_id]["stats"]:
+            self.db[rnd_id]["stats"][user_id] = user_name
+            self.save()
 
     def save_msg(self, rnd_id: str, msg_id: int):
         savetime = (datetime.datetime.now()).strftime("%Y-%m-%d %H:%M:%S")
-        self.db[rnd_id] = {"msg_id": msg_id, "savetime": str(savetime)}
+        self.db[rnd_id] = {"msg_id": msg_id, "savetime": str(savetime), "stats": {}}
         self.save()
 
     def save(self):
         with open(PATH, "w") as outfile:
-            json.dump(self.db, outfile, indent=4)
+            ujson.dump(self.db, outfile, indent=4)
 
 
 SPOILER_DB = Spoiler_DB()
@@ -60,7 +67,7 @@ async def spoiler_alert_(message: Message):
     bot_name = (await userge.bot.get_me()).username
     link = f"https://t.me/{bot_name}?start={rnd_id}"
     buttons = None
-    text_ = "**{} Shared A Spoiler** !\n[> **Click To View** <]({})".format(
+    text_ = "<b>{} Shared A Spoiler</b> !\n[<b>Click To View</b>]({})".format(
         mention_html(message.from_user.id, message.from_user.first_name), link
     )
     if message.client.is_bot:
@@ -85,36 +92,62 @@ async def spoiler_alert_(message: Message):
     await message.edit(text_, reply_markup=buttons, disable_web_page_preview=True)
 
 
-@userge.bot.on_message(
-    filters.private
-    & (
-        filters.regex(pattern=r"^/start spoiler_([\S]+)")
-        | filters.regex(pattern=r"^/spoiler_([\S]+)")
-    )
-)
-async def spoiler_get(_, message: Message):
-    spoiler_key = message.matches[0].group(1)
-    if not os.path.exists(PATH):
-        await message.err("Not Found", del_in=5)
-    view_data = SPOILER_DB.db
-    mid = view_data.get(spoiler_key, None)
-    if mid:
-        return await CHANNEL.forward_stored(
-            client=userge.bot,
-            message_id=mid["msg_id"],
-            user_id=message.from_user.id,
-            chat_id=message.chat.id,
-            reply_to_message_id=message.message_id,
-        )
-    await message.reply("Not Found / Expired")
-
-
 if userge.has_bot:
+
+    @userge.bot.on_message(
+        filters.private
+        & (
+            filters.regex(pattern=r"^/start spoiler_([\S]+)")
+            | filters.regex(pattern=r"^/spoiler_([\S]+)")
+        )
+    )
+    async def spoiler_get(_, message: Message):
+        u_user = message.from_user
+        if u_user.id not in Config.OWNER_ID and u_user.id not in Config.SUDO_USERS:
+            found = await BOT_BAN.find_one({"user_id": u_user.id})
+            if found:
+                return
+        spoiler_key = message.matches[0].group(1)
+        if os.path.exists(PATH):
+            view_data = SPOILER_DB.db
+            mid = view_data.get(spoiler_key, None)
+            try:
+                if mid:
+                    await CHANNEL.forward_stored(
+                        client=userge.bot,
+                        message_id=mid["msg_id"],
+                        user_id=u_user.id,
+                        chat_id=message.chat.id,
+                        reply_to_message_id=message.message_id,
+                    )
+                else:
+                    await message.reply("Sorry 🥺 , The Spoiler has now been expired !")
+            except UserIsBlocked:
+                pass
+        if u_user.id not in Config.OWNER_ID and u_user.id not in Config.SUDO_USERS:
+            SPOILER_DB.stats_(spoiler_key, u_user.id, u_user.first_name)
+            user_list = await BOT_START.find_one({"user_id": u_user.id})
+            if not user_list:
+                today = datetime.date.today()
+                d2 = today.strftime("%B %d, %Y")
+                start_date = d2.replace(",", "")
+                BOT_START.insert_one(
+                    {
+                        "firstname": u_user.first_name,
+                        "user_id": u_user.id,
+                        "date": start_date,
+                    }
+                )
+                log_msg = f"A New User Started your Bot \n\n• <i>ID</i>: `{u_user.id}`\n   👤 : "
+                log_msg += (
+                    f"@{u_user.username}" if u_user.username else u_user.first_name
+                )
+                await CHANNEL.log(log_msg)
 
     @userge.bot.on_callback_query(filters.regex(pattern=r"^getl([\S]+)$"))
     async def get_spoiler_link(_, c_q: CallbackQuery):
         u_id = c_q.from_user.id
-        if u_id != Config.OWNER_ID and u_id not in Config.SUDO_USERS:
+        if u_id not in Config.OWNER_ID and u_id not in Config.SUDO_USERS:
             return await c_q.answer(
                 "Given That It's A Stupid-Ass Decision, I've Elected To Ignore It.",
                 show_alert=True,
@@ -138,10 +171,10 @@ if userge.has_bot:
             pass
 
     @userge.bot.on_callback_query(filters.regex(pattern=r"^nobtnspoiler([\S]+)$"))
-    async def get_spoiler_link(_, c_q: CallbackQuery):
+    async def nobtnspoiler_(_, c_q: CallbackQuery):
         u_id = c_q.from_user.id
         u_name = c_q.from_user.first_name
-        if u_id != Config.OWNER_ID and u_id not in Config.SUDO_USERS:
+        if u_id not in Config.OWNER_ID and u_id not in Config.SUDO_USERS:
             return await c_q.answer(
                 "Given That It's A Stupid-Ass Decision, I've Elected To Ignore It.",
                 show_alert=True,
@@ -151,7 +184,7 @@ if userge.has_bot:
         url = f"https://t.me/{bot_name}?start={c_q.matches[0].group(1)}"
         try:
             await c_q.edit_message_text(
-                "**{} Shared A Spoiler** !\n[> **Click To View** <]({})".format(
+                "<b>{} Shared A Spoiler</b> !\n[<b>Click To View</b>]({})".format(
                     mention_html(u_id, u_name), url
                 ),
                 disable_web_page_preview=True,

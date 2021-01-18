@@ -1,12 +1,4 @@
-# Copyright (C) 2020 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
-#
-# This file is part of < https://github.com/UsergeTeam/Userge > project,
-# and is released under the "GNU v3.0 License Agreement".
-# Please see < https://github.com/uaudith/Userge/blob/master/LICENSE >
-#
-# All rights reserved.
-
-from datetime import datetime
+import datetime
 
 from userge import Message, userge
 
@@ -27,6 +19,7 @@ from userge import Message, userge
     del_pre=True,
 )
 async def purge_(message: Message):
+    """purge from replied message"""
     await message.edit("`purging ...`")
     from_user_id = None
     if message.filtered_input_str:
@@ -64,7 +57,7 @@ async def purge_(message: Message):
             purged_messages_count += len(list_of_messages)
             list_of_messages = []
 
-    start_t = datetime.now()
+    start_t = datetime.datetime.now()
     if message.client.is_bot:
         for a_message in await message.client.get_messages(
             chat_id=message.chat.id,
@@ -82,7 +75,60 @@ async def purge_(message: Message):
             chat_id=message.chat.id, message_ids=list_of_messages
         )
         purged_messages_count += len(list_of_messages)
-    end_t = datetime.now()
+    end_t = datetime.datetime.now()
     time_taken_s = (end_t - start_t).seconds
     out = f"<u>purged</u> {purged_messages_count} messages in {time_taken_s} seconds."
+    await message.edit(out, del_in=3)
+
+
+@userge.on_cmd(
+    "purgeme",
+    about={
+        "header": "purge messages from yourself",
+        "usage": "{tr}purgeme [number]",
+        "examples": ["{tr}purgeme 10"],
+    },
+    allow_bots=False,
+    allow_channels=False,
+    allow_via_bot=False,
+)
+async def purgeme_(message: Message):
+    """purge given no. of your messages"""
+    await message.edit("`purging ...`")
+    if not (message.input_str and message.input_str.isdigit()):
+        return await message.err(
+            "Provide a valid number of message to delete", del_in=3
+        )
+    start_t = datetime.datetime.now()
+    number = min(int(message.input_str), 100)
+    mid = message.message_id
+    msg_list = []
+    # https://t.me/pyrogramchat/266224
+    # search_messages takes some minutes to index new messages
+    # so using iter_history to get messages newer than 5 mins.
+    old_msg = (start_t - datetime.timedelta(minutes=5)).timestamp()
+
+    async for msg in userge.search_messages(
+        message.chat.id, "", limit=number, from_user="me"
+    ):
+        msg_list.append(msg.message_id)
+
+    async for new_msg in userge.iter_history(message.chat.id, offset_id=mid, offset=0):
+        if new_msg.from_user.is_self:
+            msg_list.append(new_msg.message_id)
+        if old_msg > new_msg.date or msg_list[-1] > new_msg.message_id:
+            break
+
+    # https://stackoverflow.com/questions/39734485/python-combining-two-lists-and-removing-duplicates-in-a-functional-programming
+    del_list = list(set(msg_list))
+    if mid in del_list:
+        del_list.remove(mid)
+    del_list.reverse()
+    del_list_ = del_list[:number]
+
+    await userge.delete_messages(message.chat.id, message_ids=del_list_)
+
+    end_t = datetime.datetime.now()
+    time_taken_s = (end_t - start_t).seconds
+    out = f"<u>purged</u> {len(del_list_)} messages in {time_taken_s} seconds."
     await message.edit(out, del_in=3)

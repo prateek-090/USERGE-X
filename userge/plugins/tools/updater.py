@@ -46,6 +46,7 @@ async def check_update(message: Message):
         flags.remove("push")
     if len(flags) == 1:
         branch = flags[0]
+
     repo = Repo()
     if branch not in repo.branches:
         await message.err(f"invalid branch name : {branch}")
@@ -100,6 +101,7 @@ async def check_update(message: Message):
 
 def _get_updates(repo: Repo, branch: str) -> str:
     repo.remote(Config.UPSTREAM_REMOTE).fetch(branch)
+    upst = Config.UPSTREAM_REPO.rstrip("/")
     out = ""
     upst = Config.UPSTREAM_REPO.rstrip("/")
     for i in repo.iter_commits(f"HEAD..{Config.UPSTREAM_REMOTE}/{branch}"):
@@ -125,7 +127,6 @@ async def _push_to_heroku(msg: Message, repo: Repo, branch: str) -> None:
         await _heroku_helper(sent, repo, branch)
     except GitCommandError as g_e:
         LOG.exception(g_e)
-        await sent.err(f"{g_e}, {Config.CMD_TRIGGER}restart -h and try again!")
     else:
         await sent.edit(
             f"**HEROKU APP : {Config.HEROKU_APP.name} is up-to-date with [{branch}]**"

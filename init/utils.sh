@@ -9,17 +9,19 @@
 # All rights reserved.
 
 declare -r minPVer=8
-declare -r maxPVer=10
+declare -r maxPVer=9
 
 getPythonVersion() {
     local -i count=$minPVer
-    local tmp
+    local found
     while true; do
-        tmp=$(python3.$count -V 2> /dev/null)
-        [[ -n $tmp || $count -gt $maxPVer ]] && break
+        found=$(python3.$count -c "print('hi')" 2> /dev/null)
+        test "$found" && break
         count+=1
+        [[ $count -gt $maxPVer ]] && break
     done
-    declare -gr pVer=$(sed -E 's/Python (3\.[0-9]{1,2}\.[0-9]{1,2}).*/\1/g' <<< $tmp)
+    declare -gr pVer=$(sed -E 's/Python (3\.[0-9]{1,2}\.[0-9]{1,2}).*/\1/g' <<< \
+        "$(python3.$count -V 2> /dev/null)")
 }
 
 log() {
@@ -83,12 +85,16 @@ fetchBranches() {
     done
 }
 
+updateBuffer() {
+    git config http.postBuffer 524288000
+}
+
 upgradePip() {
     pip3 install -U pip &> /dev/null
 }
 
 installReq() {
-    pip3 install -r $1/requirements.txt &> /dev/null
+    pip3 install --no-cache-dir -r $1/requirements.txt &> /dev/null
 }
 
 printLine() {
@@ -113,7 +119,7 @@ printLogo() {
                  X::::::X     X::::::X                
                  X:::::X       X:::::X                
                  X:::::X       X:::::X                
-                 XXXXXXX       XXXXXXX                                                         
+                 XXXXXXX       XXXXXXX                
 '
     printLine
 }

@@ -12,14 +12,15 @@ import io
 import os
 import random
 
-import aiohttp
 import emoji
+from bs4 import BeautifulSoup as bs
 from PIL import Image
-from pyrogram.errors import YouBlockedUser
+from pyrogram.errors import StickersetInvalid, YouBlockedUser
 from pyrogram.raw.functions.messages import GetStickerSet
 from pyrogram.raw.types import InputStickerSetShortName
 
 from userge import Config, Message, userge
+from userge.utils import get_response
 
 
 @userge.on_cmd(
@@ -100,13 +101,14 @@ async def kang_(message: Message):
             packname += "_anim"
             packnick += " (Animated)"
             cmd = "/newanimated"
-        async with aiohttp.ClientSession() as ses:
-            async with ses.get(f"http://t.me/addstickers/{packname}") as res:
-                htmlstr = (await res.text()).split("\n")
-        if (
-            "  A <strong>Telegram</strong> user has created "
-            "the <strong>Sticker&nbsp;Set</strong>."
-        ) not in htmlstr:
+        exist = False
+        try:
+            exist = await message.client.send(
+                GetStickerSet(stickerset=InputStickerSetShortName(short_name=packname))
+            )
+        except StickersetInvalid:
+            pass
+        if exist is not False:
             async with userge.conversation("Stickers", limit=30) as conv:
                 try:
                     await conv.send_message("/addsticker")
@@ -143,7 +145,7 @@ async def kang_(message: Message):
                         await conv.send_message("/publish")
                         if is_anim:
                             await conv.get_response(mark_read=True)
-                            await conv.send_message(f"<{packnick}>")
+                            await conv.send_message(f"<{packnick}>", parse_mode=None)
                         await conv.get_response(mark_read=True)
                         await conv.send_message("/skip")
                         await conv.get_response(mark_read=True)
@@ -197,7 +199,7 @@ async def kang_(message: Message):
                 await conv.send_message("/publish")
                 if is_anim:
                     await conv.get_response(mark_read=True)
-                    await conv.send_message(f"<{packnick}>")
+                    await conv.send_message(f"<{packnick}>", parse_mode=None)
                 await conv.get_response(mark_read=True)
                 await conv.send_message("/skip")
                 await conv.get_response(mark_read=True)
@@ -281,3 +283,50 @@ KANGING_STR = (
     "Imprisoning this sticker...",
     "Mr.Steal Your Sticker is stealing this sticker... ",
 )
+
+
+# Based on:
+# https://github.com/AnimeKaizoku/SaitamaRobot/blob/10291ba0fc27f920e00f49bc61fcd52af0808e14/SaitamaRobot/modules/stickers.py#L42
+@userge.on_cmd(
+    "sticker",
+    about={
+        "header": "Search Sticker Packs",
+        "usage": "Reply {tr}sticker or " "{tr}sticker [text]",
+    },
+)
+async def sticker_search(message: Message):
+    # search sticker packs
+    reply = message.reply_to_message
+    query_ = None
+    if message.input_str:
+        query_ = message.input_str
+    elif reply and reply.from_user:
+        query_ = reply.from_user.username or reply.from_user.id
+
+    if not query_:
+        return message.err(
+            "reply to a user or provide text to search sticker packs", del_in=3
+        )
+
+    await message.edit(f'🔎 Searching for sticker packs for "`{query_}`"...')
+    titlex = f'<b>Sticker Packs For:</b> "<u>{query_}</u>"\n'
+    sticker_pack = ""
+    try:
+        text = await get_response.text(
+            f"https://combot.org/telegram/stickers?q={query_}"
+        )
+    except ValueError:
+        return await message.err(
+            "Response was not 200!, Api is having some issues\n Please try again later.",
+            del_in=5,
+        )
+    soup = bs(text, "lxml")
+    results = soup.find_all("div", {"class": "sticker-pack__header"})
+    for pack in results:
+        if pack.button:
+            title_ = (pack.find("div", {"class": "sticker-pack__title"})).text
+            link_ = (pack.a).get("href")
+            sticker_pack += f"\n• [{title_}]({link_})"
+    if not sticker_pack:
+        sticker_pack = "`❌ Not Found!`"
+    await message.edit((titlex + sticker_pack), disable_web_page_preview=True)
