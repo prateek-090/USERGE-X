@@ -1,13 +1,5 @@
 """ manage your group """
 
-# Copyright (C) 2020 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
-#
-# This file is part of < https://github.com/UsergeTeam/Userge > project,
-# and is released under the "GNU v3.0 License Agreement".
-# Please see < https://github.com/uaudith/Userge/blob/master/LICENSE >
-#
-# All rights reserved.
-
 import asyncio
 import os
 import time
@@ -44,7 +36,6 @@ CHANNEL = userge.getCLogger(__name__)
 )
 async def promote_usr(message: Message):
     """ promote members in tg group """
-    custom_rank = ""
     chat_id = message.chat.id
     await message.edit("`Trying to Promote User.. Hang on!! ⏳`")
     user_id, custom_rank = message.extract_user_and_text
@@ -70,14 +61,15 @@ async def promote_usr(message: Message):
             can_invite_users=True,
             can_pin_messages=True,
         )
-        await asyncio.sleep(2)
-        await message.client.set_administrator_title(chat_id, user_id, custom_rank)
+        if custom_rank:
+            await asyncio.sleep(2)
+            await message.client.set_administrator_title(chat_id, user_id, custom_rank)
         await message.edit("`👑 Promoted Successfully..`", del_in=5)
         await CHANNEL.log(
             "#PROMOTE\n\n"
             f"USER: [{get_mem.user.first_name}](tg://user?id={get_mem.user.id}) "
             f"(`{get_mem.user.id}`)\n"
-            f"CUSTOM TITLE: `{custom_rank}`\n"
+            f"CUSTOM TITLE: `{custom_rank or None}`\n"
             f"CHAT: `{message.chat.title}` (`{chat_id}`)"
         )
     except UsernameInvalid:
@@ -151,32 +143,51 @@ async def demote_usr(message: Message):
         "header": "use this to ban group members",
         "description": "Ban member from supergroup.\n"
         "[NOTE: Requires proper admin rights in the chat!!!]",
-        "examples": "{tr}ban [username | userid] or [reply to user] :reason (optional)",
+        "flags": {"-m": "minutes", "-h": "hours", "-d": "days"},
+        "examples": "{tr}ban [flag] [username | userid] or [reply to user] :reason (optional)",
     },
     allow_channels=False,
     check_restrict_perm=True,
 )
-async def ban_usr(message: Message):
+async def ban_user(message: Message):
     """ ban user from tg group """
-    reason = ""
-    chat_id = message.chat.id
     await message.edit("`Trying to Ban User.. Hang on!! ⏳`")
     user_id, reason = message.extract_user_and_text
     if not user_id:
         await message.edit(
             text="`no valid user_id or message specified,`"
-            "`do .help ban for more info` ⚠",
+            "`do .help ban for more info`",
             del_in=5,
         )
         return
+
+    chat_id = message.chat.id
+    flags = message.flags
+    minutes = int(flags.get("-m", 0))
+    hours = int(flags.get("-h", 0))
+    days = int(flags.get("-d", 0))
+
+    ban_period = 0
+    _time = "forever"
+    if minutes:
+        ban_period = time.time() + minutes * 60
+        _time = f"{minutes}m"
+    elif hours:
+        ban_period = time.time() + hours * 3600
+        _time = f"{hours}h"
+    elif days:
+        ban_period = time.time() + days * 86400
+        _time = f"{days}d"
+
     try:
         get_mem = await message.client.get_chat_member(chat_id, user_id)
-        await message.client.kick_chat_member(chat_id, user_id)
+        await message.client.kick_chat_member(chat_id, user_id, int(ban_period))
         await message.edit(
             "#BAN\n\n"
             f"USER: [{get_mem.user.first_name}](tg://user?id={get_mem.user.id}) "
             f"(`{get_mem.user.id}`)\n"
             f"CHAT: `{message.chat.title}` (`{chat_id}`)\n"
+            f"TIME: `{_time}`\n"
             f"REASON: `{reason}`",
             log=__name__,
         )
@@ -189,7 +200,11 @@ async def ban_usr(message: Message):
     except UserIdInvalid:
         await message.edit("`invalid userid, try again with valid info ⚠`", del_in=5)
     except Exception as e_f:
-        await message.edit(f"`something went wrong! 🤔`\n\n**ERROR:** `{e_f}`", del_in=5)
+        await message.edit(
+            "`something went wrong 🤔, do .help ban for more info`\n\n"
+            f"**ERROR**: `{e_f}`",
+            del_in=5,
+        )
 
 
 @userge.on_cmd(
@@ -299,7 +314,6 @@ async def kick_usr(message: Message):
 )
 async def mute_usr(message: Message):
     """ mute user from tg group """
-    reason = ""
     chat_id = message.chat.id
     flags = message.flags
     minutes = flags.get("-m", 0)
@@ -316,10 +330,13 @@ async def mute_usr(message: Message):
         return
     if minutes:
         mute_period = int(minutes) * 60
+        _time = f"{int(minutes)}m"
     elif hours:
         mute_period = int(hours) * 3600
+        _time = f"{int(hours)}h"
     elif days:
         mute_period = int(days) * 86400
+        _time = f"{int(days)}d"
     if flags:
         try:
             get_mem = await message.client.get_chat_member(chat_id, user_id)
@@ -331,7 +348,7 @@ async def mute_usr(message: Message):
                 f"USER: [{get_mem.user.first_name}](tg://user?id={get_mem.user.id}) "
                 f"(`{get_mem.user.id}`)\n"
                 f"CHAT: `{message.chat.title}` (`{chat_id}`)\n"
-                f"MUTE UNTIL: `{minutes} minutes`\n"
+                f"MUTE UNTIL: `{_time}`\n"
                 f"REASON: `{reason}`",
                 log=__name__,
             )
@@ -457,16 +474,14 @@ async def zombie_clean(message: Message):
     )
     flags = message.flags
     rm_delaccs = "-c" in flags
-    del_stats = (
-        r"`Zero zombie accounts found in this chat... WOOHOO group is clean.. \^o^/`"
-    )
-    del_users = 0
+    can_clean = check_user.status in ("administrator", "creator")
     if rm_delaccs:
-        can_clean = check_user.status in ("administrator", "creator")
+        del_users = 0
+        del_admins = 0
+        del_total = 0
+        del_stats = r"`Zero zombie accounts found in this chat... WOOHOO group is clean.. \^o^/`"
         if can_clean:
             await message.edit("`Hang on!! cleaning zombie accounts from this chat..`")
-            del_admins = 0
-            del_total = 0
             async for member in message.client.iter_chat_members(chat_id):
                 if member.user.is_deleted:
                     try:
@@ -500,6 +515,8 @@ async def zombie_clean(message: Message):
                 r"`i don't have proper permission to do that! (* ￣︿￣)`", del_in=5
             )
     else:
+        del_users = 0
+        del_stats = r"`Zero zombie accounts found in this chat... WOOHOO group is clean.. \^o^/`"
         await message.edit("`🔎 Searching for zombie accounts in this chat..`")
         async for member in message.client.iter_chat_members(chat_id):
             if member.user.is_deleted:
@@ -523,64 +540,80 @@ async def zombie_clean(message: Message):
             )
 
 
+def chat_name_(msg: Message):
+    chat_ = msg.chat
+    if chat_.type in ("private", "bot"):
+        return " ".join([chat_.first_name, chat_.last_name or ""])
+    return chat_.title
+
+
+@userge.on_cmd(
+    "unpin",
+    about={
+        "header": "use this to unpin messages",
+        "description": "unpin messages in groups",
+        "flags": {"-all": "unpin all messages"},
+        "examples": [
+            "{tr}unpin [reply to chat message]",
+            "{tr}unpin -all [reply to chat message]",
+        ],
+    },
+    check_pin_perm=True,
+)
+async def unpin_msgs(message: Message):
+    """ unpin message """
+    reply = message.reply_to_message
+    unpinall_ = bool("-all" in message.flags)
+    try:
+        if unpinall_:
+            await message.client.unpin_all_chat_messages(message.chat.id)
+        else:
+            if not reply:
+                await message.err("First reply to a message to unpin !", del_in=5)
+                return
+            await reply.unpin()
+        await message.delete()
+        await CHANNEL.log(
+            f"{'#UNPIN_All' if unpinall_ else '#UNPIN'}\n\nCHAT: **{chat_name_(message)}**  (`{message.chat.id}`)"
+        )
+    except Exception as e_f:
+        await message.err(e_f + "\ndo .help unpin for more info ...", del_in=7)
+
+
 @userge.on_cmd(
     "pin",
     about={
-        "header": "use this to pin & unpin messages",
-        "description": "pin & unpin messages in groups with or without notify to members.",
-        "flags": {"-l": "loud", "-u": "unpin"},
+        "header": "use this to pin messages",
+        "description": "pin messages in groups, with or without notify to members.",
+        "flags": {
+            "-s": "silent",
+            "-me": "only for yourself (for private chats only), Defaults pin both sides)",
+        },
         "examples": [
             "{tr}pin [reply to chat message]",
-            "{tr}pin -l [reply to chat message]",
-            "{tr}pin -u [send to chat]",
+            "{tr}pin -s [reply to chat message]",
+            "{tr}pin -me [send to private chat]",
         ],
     },
-    allow_channels=False,
     check_pin_perm=True,
 )
 async def pin_msgs(message: Message):
-    """ pin & unpin message in groups """
-    chat_id = message.chat.id
-    flags = message.flags
-    loud_pin = "-l" in flags
-    unpin_pinned = "-u" in flags
-    if unpin_pinned:
-        try:
-            await message.client.unpin_chat_message(chat_id)
-            await message.edit("`Unpinned Successfully!`")
-            await CHANNEL.log(f"#UNPIN\n\nCHAT: `{message.chat.title}` (`{chat_id}`)")
-        except Exception as e_f:
-            await message.edit(
-                r"`something went wrong! (⊙_⊙;)`"
-                "\n`do .help pin for more info..`\n\n"
-                f"**ERROR:** `{e_f}`"
-            )
-    elif loud_pin:
-        try:
-            message_id = message.reply_to_message.message_id
-            await message.client.pin_chat_message(
-                chat_id, message_id, disable_notification=False
-            )
-            await message.edit("`Pinned Successfully!\nSilent: False")
-            await CHANNEL.log(f"#PIN-loud\n\n{message.chat.title}` (`{chat_id}`)")
-        except Exception as e_f:
-            await message.edit(
-                r"`something went wrong! (⊙_⊙;)`"
-                "\n`do .help pin for more info..`\n\n"
-                f"**ERROR:** `{e_f}`"
-            )
-    else:
-        try:
-            message_id = message.reply_to_message.message_id
-            await message.client.pin_chat_message(chat_id, message_id, disable_notification=True)
-            await message.edit("`Pinned Successfully!`")
-            await CHANNEL.log(f"#PIN\n\nCHAT: `{message.chat.title}` (`{chat_id}`)")
-        except Exception as e_f:
-            await message.edit(
-                r"`something went wrong! (⊙_⊙;)`"
-                "\n`do .help pin for more info..`\n\n"
-                f"**ERROR:** `{e_f}`"
-            )
+    """ pin message """
+    reply = message.reply_to_message
+    if not reply:
+        await message.err("First  reply to a message to pin !", del_in=5)
+        return
+    try:
+        await reply.pin(
+            disable_notification=bool("-s" in message.flags),
+            both_sides=(not bool("-me" in message.flags)),
+        )
+        await message.delete()
+        await CHANNEL.log(
+            f"#PIN\n\nCHAT: **{chat_name_(message)}**  (`{message.chat.id}`)"
+        )
+    except Exception as e_f:
+        await message.err(e_f + "\ndo .help pin for more info ...", del_in=7)
 
 
 @userge.on_cmd(
@@ -607,10 +640,7 @@ async def chatpic_func(message: Message):
         if message.reply_to_message.photo:
             try:
                 img_id = message.reply_to_message.photo.file_id
-                img_ref = message.reply_to_message.photo.file_ref
-                await message.client.set_chat_photo(
-                    chat_id=chat_id, photo=img_id, file_ref=img_ref
-                )
+                await message.client.set_chat_photo(chat_id=chat_id, photo=img_id)
                 await message.delete()
                 await CHANNEL.log(
                     f"#GPIC-SET\n\nCHAT: `{message.chat.title}` (`{chat_id}`)"
