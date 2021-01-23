@@ -70,7 +70,7 @@ async def check_media_link(media_link: str):
         link = [chat_id, int(message_id)]
     return link_type, link
     str(match.group(3))
-            message_id = match.group(4)
+        message_id = match.group(4)
         else:
             chat_id = match.group(2)
             message_id = match.group(3)
