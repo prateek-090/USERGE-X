@@ -1,4 +1,4 @@
-"""Fun plugin"""
+﻿"""Fun plugin"""
 
 import asyncio
 from datetime import datetime
@@ -17,6 +17,7 @@ CACHED_MEDIA = None
 
 @userge.on_cmd("alive", about={"header": "Just For Fun"}, allow_channels=False)
 async def alive_inline(message: Message):
+    me = await userge.get_me()
     global CACHED_MEDIA
     if message.client.is_bot:
         if Config.ALIVE_MEDIA:
@@ -24,7 +25,7 @@ async def alive_inline(message: Message):
             if url_.lower() == "false":
                 await userge.bot.send_message(
                     message.chat.id,
-                    Bot_Alive.alive_info(),
+                    Bot_Alive.alive_info(me),
                     reply_markup=Bot_Alive.alive_buttons(),
                     disable_web_page_preview=True,
                 )
@@ -34,14 +35,14 @@ async def alive_inline(message: Message):
                     await userge.bot.send_animation(
                         message.chat.id,
                         animation=url_,
-                        caption=Bot_Alive.alive_info(),
+                        caption=Bot_Alive.alive_info(me),
                         reply_markup=Bot_Alive.alive_buttons(),
                     )
                 elif type_ == "url_image":
                     await userge.bot.send_photo(
                         message.chat.id,
                         photo=url_,
-                        caption=Bot_Alive.alive_info(),
+                        caption=Bot_Alive.alive_info(me),
                         reply_markup=Bot_Alive.alive_buttons(),
                     )
                 elif type_ == "tg_media" and isinstance(media_, list):
@@ -56,14 +57,14 @@ async def alive_inline(message: Message):
                     await userge.bot.send_cached_media(
                         message.chat.id,
                         file_id=CACHED_MEDIA,
-                        caption=Bot_Alive.alive_info(),
+                        caption=Bot_Alive.alive_info(me),
                         reply_markup=Bot_Alive.alive_buttons(),
                     )
         else:
             await userge.bot.send_photo(
                 message.chat.id,
                 photo=Bot_Alive.alive_default_imgs(),
-                caption=Bot_Alive.alive_info(),
+                caption=Bot_Alive.alive_info(me),
                 reply_markup=Bot_Alive.alive_buttons(),
             )
     else:
@@ -84,6 +85,7 @@ if userge.has_bot:
 
     @userge.bot.on_callback_query(filters.regex(pattern=r"^settings_btn$"))
     async def alive_cb(_, c_q: CallbackQuery):
+        me = await userge.get_me()
         allow = bool(
             c_q.from_user
             and (
@@ -95,7 +97,7 @@ if userge.has_bot:
             start = datetime.now()
             try:
                 await c_q.edit_message_text(
-                    Bot_Alive.alive_info(),
+                    Bot_Alive.alive_info(me),
                     reply_markup=Bot_Alive.alive_buttons(),
                     disable_web_page_preview=True,
                 )
@@ -112,7 +114,7 @@ if userge.has_bot:
         if Config.HEROKU_APP and Config.RUN_DYNO_SAVER:
             alive_s += "⛽️ 𝗗𝘆𝗻𝗼 𝗦𝗮𝘃𝗲𝗿 :  ✅ 𝙴𝚗𝚊𝚋𝚕𝚎𝚍\n"
         alive_s += f"💬 𝗕𝗼𝘁 𝗙𝗼𝗿𝘄𝗮𝗿𝗱𝘀 : {_parse_arg(Config.BOT_FORWARDS)}\n"
-        alive_s += f"🛡 𝗣𝗠 𝗚𝗮𝘂𝗿𝗱 : {_parse_arg(not Config.ALLOW_ALL_PMS)}\n"
+        alive_s += f"🛡 𝗣𝗠 𝗚𝘂𝗮𝗿𝗱 : {_parse_arg(not Config.ALLOW_ALL_PMS)}\n"
         alive_s += f"📝 𝗣𝗠 𝗟𝗼𝗴𝗴𝗲𝗿 : {_parse_arg(Config.PM_LOGGING)}"
         if allow:
             end = datetime.now()
@@ -152,14 +154,14 @@ class Bot_Alive:
         return link_type, link
 
     @staticmethod
-    def alive_info():
+    def alive_info(me):
+        u_name = " ".join([me.first_name, me.last_name or ""])
         alive_info = f"""
 <a href="https://telegram.dog/x_xtests"><b>USERGE-X</a> is Up and Running.</b>
-
   🐍   <b>Python :</b>    <code>v{versions.__python_version__}</code>
   🔥   <b>Pyrogram :</b>    <code>v{versions.__pyro_version__}</code>
   🧬   <b>𝑿 :</b>    <code>v{get_version()}</code>
-
+  👤   <b>User :</b>    <code>{u_name}</code>
 <b>{Bot_Alive._get_mode()}</b>    <code>|</code>    🕔  <b>{userge.uptime}</b>
 """
         return alive_info
