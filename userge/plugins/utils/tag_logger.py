@@ -57,7 +57,7 @@ async def all_log(message: Message):
 )
 async def grp_log(_, message: Message):
     me = await userge.get_me()
-    id = message.message_id
+    message.message_id
     reply = message.reply_to_message
     log = f"""
 #TAGS
@@ -87,6 +87,7 @@ async def grp_log(_, message: Message):
                 Config.LOG_CHANNEL_ID,
                 log,
                 parse_mode="html",
-                disable_web_page_preview=True,) 
+                disable_web_page_preview=True,
+            )
         except FloodWait as e:
             await asyncio.sleep(e.x + 3)
