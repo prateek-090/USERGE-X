@@ -82,7 +82,7 @@ async def grp_log(_, message: Message):
                     Config.PM_LOG_GROUP_ID,
                     log,
                     parse_mode="html",
-                    disable_web_page_preview=True,
+                    disable_web_page_preview=False,
                 )
                 await asyncio.sleep(0.5)
                 await userge.forward_messages(
@@ -98,7 +98,7 @@ async def grp_log(_, message: Message):
                 Config.PM_LOG_GROUP_ID,
                 log,
                 parse_mode="html",
-                disable_web_page_preview=True,
+                disable_web_page_preview=False,
             )
             await asyncio.sleep(0.5)
             await userge.forward_messages(
@@ -143,7 +143,7 @@ async def pm_log(_, message: Message):
                 Config.PM_LOG_GROUP_ID,
                 log3,
                 parse_mode="html",
-                disable_web_page_preview=True,
+                disable_web_page_preview=False,
             )
         await asyncio.sleep(0.5)
         await userge.forward_messages(
@@ -160,14 +160,14 @@ async def pm_log(_, message: Message):
                 Config.PM_LOG_GROUP_ID,
                 log1,
                 parse_mode="html",
-                disable_web_page_preview=True,
+                disable_web_page_preview=False,
             )
         else:
             await userge.send_message(
                 Config.PM_LOG_GROUP_ID,
                 log2,
                 parse_mode="html",
-                disable_web_page_preview=True,
+                disable_web_page_preview=False,
             )
         await asyncio.sleep(0.5)
         await userge.forward_messages(
