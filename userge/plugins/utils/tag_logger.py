@@ -1,4 +1,4 @@
-# created for USERGE-X by @Kakashi_HTK/@ashwinstr
+# Created for USERGE-X by @Kakashi_HTK/@ashwinstr
 
 import asyncio
 
