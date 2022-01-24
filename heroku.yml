@@ -1,3 +1,4 @@
+name: manually deploy to HEROKU
 build: 
   docker:
       worker: Dockerfile
